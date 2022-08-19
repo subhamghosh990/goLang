@@ -1,4 +1,4 @@
-package kafkaConsumer
+package kafka
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	TOPIC  = "ABC"
-	BROKER = "localhost:9092"
+	TOPIC  = "TEST"
+	BROKER = "localhost:9093"
 )
 
 func ConsumeAgain(wg *sync.WaitGroup) {
@@ -22,9 +22,10 @@ func ConsumeAgain(wg *sync.WaitGroup) {
 	fmt.Println("subham: Consume 1")
 	fmt.Println("subham: Consume 2")
 	diler := &kafka.Dialer{
-		Timeout:   1 * time.Second,
+		Timeout:   10 * time.Second,
 		DualStack: true,
 	}
+
 	p, err := diler.LookupPartition(context.TODO(), "tcp", BROKER, TOPIC, 0)
 	if err != nil {
 		log.Fatal("can not lookup partition: ", err.Error())
@@ -45,6 +46,7 @@ func ConsumeAgain(wg *sync.WaitGroup) {
 	for _, val := range partitions {
 		fmt.Println("Partition id", val.ID, "topic is", val.Topic)
 	}
+	fmt.Println("subham: Consume 5")
 	a, _ := conn.ReadLastOffset()
 	conn.Seek(a, 0)
 	fmt.Println("laste offset : ", a, kafka.LastOffset)
@@ -54,7 +56,33 @@ func ConsumeAgain(wg *sync.WaitGroup) {
 			log.Fatal("ccc   subham failed to Read : ", err)
 			break
 		}
-		fmt.Println("Partition: ", msg.Partition, " Offset: ", msg.Offset, " Topic: ", msg.Topic)
+		fmt.Println("Partition: ", msg.Partition, " Offset: ", msg.Offset, " Topic: ", msg.Topic, "key : ", string(msg.Key))
+
+		fmt.Println("subham: received msg :", string(msg.Value))
+	}
+
+}
+
+func ConsumeWindows(wg *sync.WaitGroup) {
+	fmt.Println("subham: ConsumeWindows 1 ")
+	if wg != nil {
+		defer wg.Done()
+	}
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     []string{BROKER},
+		Topic:       TOPIC,
+		GroupID:     "TEST-3",
+		StartOffset: kafka.LastOffset,
+	})
+	fmt.Println("subham: ConsumeWindows 2 ", kafka.LastOffset)
+	for {
+		msg, err := reader.FetchMessage(context.Background())
+		fmt.Println("Starting to fetch from Kafka: reader: ", reader.Config().Topic, reader.Config().GroupID, reader.Config().Brokers)
+		if err != nil {
+			fmt.Println("Failed to fetch from Kafka: Error: ", err.Error())
+			panic("could not read message " + err.Error())
+		}
+		fmt.Println("Partition: ", msg.Partition, " Offset: ", msg.Offset, " Topic: ", msg.Topic, "key : ", string(msg.Key))
 
 		fmt.Println("subham: received msg :", string(msg.Value))
 	}

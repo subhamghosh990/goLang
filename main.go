@@ -103,8 +103,10 @@ func main() {
 	} else if argMent == "kafka" {
 
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go kafka.ConsumeAgain(&wg)
+		wg.Add(2)
+		go kafka.ProduceWindows(&wg)
+		go kafka.ConsumeWindows(&wg)
+		//go kafka.ConsumeAgain(&wg)
 		wg.Wait()
 	}
 }
