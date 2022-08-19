@@ -100,13 +100,22 @@ func main() {
 		go routine.SendChanGoRoutine(ch, &wg)
 		go routine.ReceivedChanGoRoutine(ch, &wg)
 		wg.Wait()
-	} else if argMent == "kafka" {
+	} else if argMent == "kafkaProduce" {
 
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(1)
 		go kafka.ProduceWindows(&wg)
-		go kafka.ConsumeWindows(&wg)
-		//go kafka.ConsumeAgain(&wg)
+		wg.Wait()
+	} else if argMent == "kafkaConsume" {
+		var gpId string
+		if len(os.Args) > 2 {
+			gpId = os.Args[2]
+		} else {
+			os.Exit(1)
+		}
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go kafka.ConsumeWindows(&wg, gpId)
 		wg.Wait()
 	}
 }

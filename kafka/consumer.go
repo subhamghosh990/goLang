@@ -63,7 +63,7 @@ func ConsumeAgain(wg *sync.WaitGroup) {
 
 }
 
-func ConsumeWindows(wg *sync.WaitGroup) {
+func ConsumeWindows(wg *sync.WaitGroup, gpID string) {
 	fmt.Println("subham: ConsumeWindows 1 ")
 	if wg != nil {
 		defer wg.Done()
@@ -71,7 +71,7 @@ func ConsumeWindows(wg *sync.WaitGroup) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     []string{BROKER},
 		Topic:       TOPIC,
-		GroupID:     "TEST-3",
+		GroupID:     gpID,
 		StartOffset: kafka.LastOffset,
 	})
 	fmt.Println("subham: ConsumeWindows 2 ", kafka.LastOffset)
