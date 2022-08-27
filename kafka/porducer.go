@@ -59,32 +59,60 @@ func ProduceKafka(wg *sync.WaitGroup) {
 
 }
 
-func ProduceWindows(wg *sync.WaitGroup) {
-	if wg != nil {
-		defer wg.Done()
-	}
+var wr *kafka.Writer
+var status bool
 
-	writer := kafka.NewWriter(kafka.WriterConfig{
+func createKafkaWriter() {
+	wr := kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      []string{BROKER},
 		Topic:        TOPIC,
 		MaxAttempts:  3,
 		RequiredAcks: -1,
 		Async:        true,
 	})
-	writer.AllowAutoTopicCreation = false
+	wr.AllowAutoTopicCreation = false
+	go checkStatus()
+}
+
+func checkStatus() {
+	diler := &kafka.Dialer{
+		Timeout:   10 * time.Second,
+		DualStack: true,
+	}
+	for {
+		_, err := diler.Dial("tcp", BROKER)
+		if err != nil {
+			status = false
+			fmt.Println("checkStatus err : ", err)
+		} else {
+			//fmt.Println("checkStatus no err : ", err)
+			status = true
+		}
+	}
+
+}
+func ProduceWindows(wg *sync.WaitGroup) {
+	if wg != nil {
+		defer wg.Done()
+	}
+
 	fmt.Println("ProduceWindows 1")
+	createKafkaWriter()
 	var data string
 	for {
-		fmt.Println("enter Input")
-		fmt.Scanln(&data)
-		msg := kafka.Message{
-			Key:   []byte("key-1"),
-			Value: []byte(data),
-		}
-		err := writer.WriteMessages(context.Background(), msg)
-		if err != nil {
-			log.Fatal("ccc   subham failed to write : ", err.Error(), " -> TOPIC : ", TOPIC)
-			break
+		fmt.Println("ProduceWindows status : ", status)
+		if status {
+			fmt.Println("enter Input")
+			fmt.Scanln(&data)
+			msg := kafka.Message{
+				Key:   []byte("key-1"),
+				Value: []byte(data),
+			}
+			err := wr.WriteMessages(context.Background(), msg)
+			if err != nil {
+				log.Fatal("ccc   subham failed to write : ", err.Error(), " -> TOPIC : ", TOPIC)
+				break
+			}
 		}
 	}
 

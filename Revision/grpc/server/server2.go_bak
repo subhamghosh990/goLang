@@ -1,0 +1,30 @@
+package server2
+
+import (
+	abc "abc"
+	"context"
+	"net"
+
+	"google.golang.org/grpc"
+)
+
+type server struct{}
+
+func initialize() bool {
+	lis, err := net.Listen("tcp", "990")
+	if err != nil {
+		return false
+	}
+	ser := server{}
+	gs := grpc.NewServer()
+	abc.RegisterABCServiceServer(gs, &ser)
+	if err := grpc.Serve(lis); err != nil {
+		return false
+	}
+	return true
+}
+
+func (s *server) SendRpcData(ctx context.Context, req *abc.DataResq) (*abc.DataResq, error) {
+	resp := &abc.DataResq{Id: req.Id * 2}
+	return resp
+}

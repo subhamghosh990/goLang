@@ -41,7 +41,9 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("marshalling Data : ", string(b))
-
+	arr := [2]int{1, 2}
+	fmt.Println("len : ", len(arr), " cap : ", cap(arr), " add :%V ", arr)
+	fmt.Printf("aaa : %p", ip)
 	//os.Exit(1)
 	var argMent string
 	if len(os.Args) > 1 {
