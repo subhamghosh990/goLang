@@ -1,0 +1,20 @@
+{{- if .Values.rating_orchestrator_enabled -}}
+{{- $cnfHdr := (dict "" "") -}}
+{{- include "cnfTplHeader_2_8" (dict "cnfHdr" $cnfHdr "dot" . ) -}}
+apiVersion: v1
+kind: Service
+{{- include "cnfTplMetadata_2_8" (dict "setOffset" "0" "cnfHdr" $cnfHdr "metadata" "") }}
+spec:
+  ports:
+    - name: grpc
+      port: {{ .Values.componentSpec.service_fend.ports.port }}
+      targetPort: {{ .Values.componentSpec.service_fend.ports.httpTargetPort }}
+    - name: http2-iwf
+      port: {{ .Values.componentSpec.service_fend.ports.iwfPort }}
+      targetPort: {{ .Values.componentSpec.service_fend.ports.iwfHttpTargetPort }}
+    - name: http2-rateprofile
+      port: {{ .Values.componentSpec.service_fend.ports.dynCfgPort }}
+      targetPort: {{ .Values.componentSpec.service_fend.ports.dynCfgTargetPort }}
+  selector:
+    app: {{ .Values.componentSpec.deployment.pod_metaspec.labels.app }}
+{{- end -}}

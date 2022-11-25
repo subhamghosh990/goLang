@@ -1,4 +1,4 @@
-package appmain
+package main
 
 import (
 	"encoding/json"

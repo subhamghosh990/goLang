@@ -1,0 +1,45 @@
+package client2
+
+import (
+	abc "abc"
+	"context"
+	"fmt"
+	"time"
+
+	"google.golang.org/grpc"
+)
+
+var conn *grpc.ClientConn
+var abcClient *abc.ABCServiceClient
+
+const (
+	IP   = "localhost"
+	PORT = 990
+)
+
+func initialize() bool {
+	servAd := fmt.Sprintf("%s:%d", IP, PORT)
+	timeOutAtr := 10 * time.Second
+	conn, err := grpc.Dial(servAd, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeOutAtr))
+	if err != nil {
+		return false
+	}
+	abcClient = abc.NewABCServiceClient(conn)
+	return true
+}
+
+func sendData() bool {
+	if abcClient == nil {
+		if !initialize() {
+			return false
+		}
+	}
+	ctx := context.Background()
+	reqData := &abc.DataResq{Id: 200}
+	resp, err := abcClient.SendRpcData(ctx, reqData)
+	if err != nil {
+		return false
+	}
+	fmt.Println(" resp : ", resp)
+	return true
+}

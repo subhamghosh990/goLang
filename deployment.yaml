@@ -1,0 +1,292 @@
+{{- if .Values.chf_abc_enabled -}}
+{{- $cnfHdr := (dict "" "") -}}
+{{- include "cnfTplHeader_2_8" (dict "cnfHdr" $cnfHdr "dot" . ) -}}
+apiVersion: apps/v1
+kind: Deployment
+{{- if eq true .Values.global.app_prefix_enable }}
+metadata:
+  name: {{ .Values.global.app_name_prefix }}-{{ .Values.chf_abc.pod_metaspec.labels.app }}
+  labels:
+    app: {{ .Values.global.app_name_prefix }}-{{ .Values.chf_abc.pod_metaspec.labels.app }}
+    release: {{ .Values.global.app_name_prefix }}-{{ .Values.chf_abc.pod_metaspec.labels.release }}
+{{ else }}
+{{- include "cnfTplMetadata_2_8" (dict "setOffset" "0" "cnfHdr" $cnfHdr "metadata" "") }}
+{{- end }}
+spec:
+  replicas: {{ .Values.chf_abc.replicas}}
+  selector:
+    matchLabels:
+       app: {{ .Values.chf_abc.pod_metaspec.labels.app }}
+  template:
+    {{- include "cnfTplMetadata_2_8" (dict "setOffset" "4" "cnfHdr" $cnfHdr "metadata" .Values.chf_abc.pod_metaspec) }}
+    spec:
+     serviceAccountName: {{ .Values.nf.nfId }}-chf-svcaccount
+    {{- if eq true .Values.chf_abc.nodeselector.enable }}
+     nodeSelector:
+       {{ .Values.chf_abc.nodeselector.label }}: "{{ .Values.chf_abc.nodeselector.value }}"  
+     affinity:
+       podAntiAffinity:
+         requiredDuringSchedulingIgnoredDuringExecution:
+         - labelSelector:
+             matchExpressions:
+             - key:  app
+               operator: In
+               values:
+               - "chf_abc"
+           topologyKey: "kubernetes.io/hostname"
+     {{- end }}
+     containers:
+        - name: chf-abc-container
+          image: {{ .Values.global.hub }}/{{.Values.chf_abc.image}}
+
+          imagePullPolicy: IfNotPresent
+          #args:
+          # - /bin/bash
+          # - -c
+          # - sleep 40; ./Start_abc.sh;
+          command:
+              - /opt/bin/abcExe
+          resources:
+            limits:
+              memory: {{ .Values.componentSpec.deployment.us_abc.resources.limits.memory }}
+              cpu: {{ .Values.componentSpec.deployment.us_abc.resources.limits.cpu }}
+            requests:
+              cpu: {{ .Values.componentSpec.deployment.us_abc.resources.limits.cpu }}
+              memory: {{ .Values.componentSpec.deployment.us_abc.resources.limits.memory }}
+          volumeMounts:
+              - name:  chf-abc-mgmt-configvolume
+                mountPath: /opt/bin/config/mgmt/
+              - name:  chf-abc-static-configvolume
+                mountPath: /opt/bin/config/static/
+              - name:  xyz-mgmt-configvolume
+                mountPath: /opt/bin/commonconfig/mgmt/
+              - name:  xyz-static-configvolume
+                mountPath: /opt/bin/commonconfig/static/
+              - name:  chf-abc-events
+                mountPath: /opt/bin/events/
+              - name:  tz-config
+                mountPath: /etc/localtime
+          ports:
+            - name: httpport
+              containerPort: {{ .Values.componentSpec.service_fend.ports.httpTargetPort }}
+              pabctocol: TCP
+            - containerPort: 8081
+              name: metrics
+              pabctocol: TCP
+
+          readinessPabcbe:
+            httpGet:
+              path: /status/ready
+              port: 9999
+            failureThreshold: 30
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            successThreshold: 1
+            timeoutSeconds: 1
+          livenessPabcbe:
+            httpGet:
+              path: /status/live
+              port: 9999
+            failureThreshold: 30
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            successThreshold: 1
+            timeoutSeconds: 1
+
+
+          env:
+
+          - name: K8S_POD_ID
+            valueFabcm:
+             fieldRef:
+              fieldPath: metadata.uid
+
+          - name: K8S_CONTAINER_ID
+            valueFabcm:
+             fieldRef:
+              fieldPath: metadata.uid
+
+          - name: K8S_CONTAINER_NAME
+            value: chf-abc-container
+
+          - name: K8S_NAMESPACE
+            valueFabcm:
+             fieldRef:
+              fieldPath: metadata.namespace
+
+          - name: MY_NODE_NAME
+            valueFabcm:
+             fieldRef:
+              fieldPath: spec.nodeName
+
+          - name: MY_POD_NAME
+            valueFabcm:
+             fieldRef:
+              fieldPath: metadata.name
+
+          - name: MICabcSERVICE_NAME
+            value: {{ $cnfHdr.nfVariables.svcname }}
+          - name: ENV_SERVICE_ID
+            value: {{.Values.componentSpec.deployment.us_abc.env_svc_id | quote}}
+          - name: APP_PORT
+            value: {{ .Values.componentSpec.service_fend.ports.httpTargetPort | quote}}
+          - name: COMMON_STATIC_CONFIG_FILE
+            value: /opt/bin/commonconfig/static/CommonStaticConfig.json
+          - name: COMMON_DYN_CONFIG_FILE
+            value: /opt/bin/commonconfig/mgmt/CommonDynamicConfig.json
+          - name: abc_STATIC_CONFIG_FILE
+            value: /opt/bin/config/static/abcStatic.json
+          - name: abc_DYN_CONFIG_FILE
+            value: /opt/bin/commonconfig/mgmt/abcDynamic.json
+          - name: KPI_CONFIG_FILE
+            value: /opt/metric/xyzMetric.json
+          - name: EVENTS_FILE
+            value: /opt/bin/events/events.json
+          - name: COMMON_NOTIFICATIONS_EVENT_STATUS_CFG_FILE
+            value: /opt/bin/commonconfig/mgmt/GenericNotificationServiceConfig.json
+          - name: COMMON_CALL_TRACE_FILE 
+            value: /opt/bin/commonconfig/mgmt/SingleCallTrace.json
+          - name: VAULT_CONFIG_FILE
+            value: {{ .Values.global.vault.vault_config_file }}
+          - name: OUT_TOPIC
+            value: "xyzEDR,GNS,SLC"
+
+        -
+          command:
+            - /bin/bash
+            - -c
+            - NatsSubFb LOG,CONFIG log 1 2 7 1000000 30
+          env:
+            - name: MS_CONFIG_REVISION
+              valueFabcm:
+                configMapKeyRef:
+                  name: xyz-v1-mgmt-cfg
+                  key: revision
+            - name: NF_CONFIG_REVISION
+              valueFabcm:
+                configMapKeyRef:
+                  name: xyz-v1-mgmt-cfg
+                  key: revision
+            - name: K8S_POD_ID
+              valueFabcm:
+               fieldRef:
+                fieldPath: metadata.name
+            - name: K8S_NAMESPACE
+              valueFabcm:
+               fieldRef:
+                fieldPath: metadata.namespace
+            - name: MICabcSERVICE_NAME
+              value: {{ $cnfHdr.nfVariables.svcname }}
+            - name: NF_PREFIX
+              value: {{ $cnfHdr.nfVariables.nfPrefix }}
+            - name: NF_TYPE
+              value: {{ $cnfHdr.nfVariables.nfType }}
+            - name: NF
+              value: {{ $cnfHdr.nfVariables.nfName }}
+            - name: ENV_SERVICE_ID
+              value: {{.Values.componentSpec.deployment.us_abc.env_svc_id | quote}}
+            - name: APP_PORT
+              value: {{.Values.componentSpec.deployment.us_cim.app_port | quote}}
+            - name: OUT_TOPIC
+              value: xyzEDR:{{ .Values.global.us_cim.topic.edr }}:true,GNS:{{ .Values.global.us_cim.topic.notification }}:true,SLC:{{ .Values.global.us_cim.topic.slc }}:false
+
+          envFabcm:
+            - configMapRef:
+                name: chf-abc-v1-env-cfg
+
+          image: {{.Values.global.hub}}/{{.Values.global.us_cim.image}}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6060
+              name: metrics
+              pabctocol: TCP
+          name: us-cim
+          resources:
+            limits:
+              memory: {{ .Values.componentSpec.deployment.us_cim.resources.limits.memory }}
+              cpu: {{ .Values.componentSpec.deployment.us_cim.resources.limits.cpu }}
+          tty: true
+          volumeMounts:
+          - mountPath: /opt/logs
+            name: mnt-oam-sidecar
+          - mountPath: /config/cfg1/
+            name: chf-abc-config1
+          - mountPath: /config/all/
+            name: chf-abc-all-config
+          - mountPath: /config/cfg2/
+            name: chf-abc-config2
+          - mountPath: /opt/conf/
+            name: cim-config
+     dnsPolicy: ClusterFirst
+     restartPolicy: Always
+     dnsConfig:
+       options:
+         - name: ndots
+           value: "1"
+     schedulerName: default-scheduler
+     securityContext: {}
+     terminationGracePeriodSeconds: 30
+     volumes:
+     - configMap:
+         name: chf-abc-v1-static-cfg
+       name: chf-abc-all-config
+     - configMap:
+         items:
+         - key: config1.ini
+           path: config1.ini
+         name: chf-abc-v1-static-cfg
+       name: chf-abc-config1
+     - configMap:
+         items:
+         - key: chf-abc.json
+           path: chf-abc.json
+         name: xyz-v1-mgmt-cfg
+       name: chf-abc-config3
+     - configMap:
+         items:
+         - key: events.json
+           path: events.json
+         name: chf-abc-v1-eventdef-cfg
+       name: chf-abc-events
+     - configMap:
+         items:
+         - key: config2.ini
+           path: config2.ini
+         name: chf-abc-v1-static-cfg
+       name: chf-abc-config2
+     - configMap:
+         items:
+         - key: cim.json
+           path: cim.json
+         name: xyz-v1-mgmt-cfg
+       name: cim-config
+
+     - name: mnt-oam-sidecar
+       hostPath:
+         path: /data/logs
+         type: Directory
+     - hostPath:
+         path: /etc/localtime
+         type: ""
+       name: tz-config
+     - name: chf-abc-mgmt-configvolume
+       configMap:
+         name: xyz-v1-mgmt-cfg
+     - name: chf-abc-static-configvolume
+       configMap:
+         name: chf-abc-v1-static-cfg
+         items:
+         - key: abcStatic.json
+           path: abcStatic.json
+     - name: xyz-mgmt-configvolume
+       configMap:
+         name: {{.Values.nf.nfType}}-v1-mgmt-cfg
+     - name: xyz-static-configvolume
+       configMap:
+         name: {{.Values.nf.nfType}}-v1-static-cfg
+         items:
+         - key:  CommonStaticConfig.json
+           path: CommonStaticConfig.json
+         - key:  vault.json
+           path: vault.json
+{{- end -}}
